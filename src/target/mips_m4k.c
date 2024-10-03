@@ -43,11 +43,22 @@ static int mips_m4k_examine_debug_reason(struct target *target)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+	uint32_t debug;
 	uint32_t break_status;
 	int retval;
 
 	if ((target->debug_reason != DBG_REASON_DBGRQ)
 			&& (target->debug_reason != DBG_REASON_SINGLESTEP)) {
+
+		/* Check the Bp bit in the debug register to see whether this
+		   debug entry is due to an SDBBP instruction. */
+		retval = mips32_cp0_read(ejtag_info, &debug, 23, 0);
+		if (retval != ERROR_OK)
+			return retval;
+		if (debug & 0x2) {
+			target->debug_reason = DBG_REASON_BREAKPOINT;
+		}
+
 		if (ejtag_info->debug_caps & EJTAG_DCR_IB) {
 			/* get info about inst breakpoint support */
 			retval = target_read_u32(target,

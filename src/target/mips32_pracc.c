@@ -839,32 +839,45 @@ int mips32_pracc_write_mem(struct mips_ejtag *ejtag_info, uint32_t addr, int siz
 	 * is the region cacheable or uncached.
 	 * If cacheable we have to synchronize the cache
 	 */
-	if (cached == 3 || cached == 0) {		/* Write back cache or write through cache */
-		uint32_t start_addr = addr;
-		uint32_t end_addr = addr + count * size;
-		uint32_t rel = (conf & MIPS32_CONFIG0_AR_MASK) >> MIPS32_CONFIG0_AR_SHIFT;
-		/* FIXME: In MIPS Release 6, the encoding of CACHE instr has changed */
-		if (rel > MIPS32_RELEASE_2) {
-			LOG_DEBUG("Unsupported MIPS Release ( > 5)");
-			return ERROR_FAIL;
+	switch (cached) {
+		case 0:  // m4k/mips32 reserved.
+		case 3:  // m4k WB.
+		case 4:  // m4k CWBE.
+		case 5:  // m4k CWB.
+		{
+			uint32_t start_addr = addr;
+			uint32_t end_addr = addr + count * size;
+			uint32_t rel = (conf & MIPS32_CONFIG0_AR_MASK) >> MIPS32_CONFIG0_AR_SHIFT;
+			/* FIXME: In MIPS Release 6, the encoding of CACHE instr has changed */
+			if (rel > MIPS32_RELEASE_2) {
+				LOG_DEBUG("Unsupported MIPS Release ( > 5)");
+				return ERROR_FAIL;
+			}
+			retval = mips32_pracc_synchronize_cache(ejtag_info, start_addr, end_addr, cached, rel);
+			break;
 		}
-		retval = mips32_pracc_synchronize_cache(ejtag_info, start_addr, end_addr, cached, rel);
-	} else {
-		struct pracc_queue_info ctx = {.ejtag_info = ejtag_info};
+		case 1:  // m4k/mips32 reserved.
+		case 2:  // m4k UC.
+		case 6:  // m4k/mips32 reserved.
+		case 7:  // m4k UCA.
+		default: {
+			struct pracc_queue_info ctx = {.ejtag_info = ejtag_info};
 
-		pracc_queue_init(&ctx);
-		if (mips32_cpu_support_sync(ejtag_info))
-			pracc_add(&ctx, 0, MIPS32_SYNC(ctx.isa));
-		if (mips32_cpu_support_hazard_barrier(ejtag_info))
-			pracc_add(&ctx, 0, MIPS32_EHB(ctx.isa));
-		pracc_add(&ctx, 0, MIPS32_B(ctx.isa, NEG16((ctx.code_count + 1) << ctx.isa)));	/* jump to start */
-		pracc_add(&ctx, 0, MIPS32_NOP);
-		ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL, 1);
-		if (ctx.retval != ERROR_OK) {
-			LOG_ERROR("Unable to barrier");
-			retval = ctx.retval;
+			pracc_queue_init(&ctx);
+			if (mips32_cpu_support_sync(ejtag_info))
+				pracc_add(&ctx, 0, MIPS32_SYNC(ctx.isa));
+			if (mips32_cpu_support_hazard_barrier(ejtag_info))
+				pracc_add(&ctx, 0, MIPS32_EHB(ctx.isa));
+			pracc_add(&ctx, 0, MIPS32_B(ctx.isa, NEG16((ctx.code_count + 1) << ctx.isa)));	/* jump to start */
+			pracc_add(&ctx, 0, MIPS32_NOP);
+			ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL, 1);
+			if (ctx.retval != ERROR_OK) {
+				LOG_ERROR("Unable to barrier");
+				retval = ctx.retval;
+			}
+			pracc_queue_free(&ctx);
+			break;
 		}
-		pracc_queue_free(&ctx);
 	}
 
 	return retval;
