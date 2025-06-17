@@ -133,7 +133,7 @@ static void gw16012_reset(int trst, int srst)
 		gw16012_control(0x0b);
 }
 
-static void gw16012_end_state(tap_state_t state)
+static void gw16012_end_state(enum tap_state state)
 {
 	if (tap_is_state_stable(state))
 		tap_set_end_state(state);
@@ -187,7 +187,7 @@ static void gw16012_path_move(struct pathmove_command *cmd)
 
 static void gw16012_runtest(unsigned int num_cycles)
 {
-	tap_state_t saved_end_state = tap_get_end_state();
+	enum tap_state saved_end_state = tap_get_end_state();
 
 	/* only do a state_move when we're not already in IDLE */
 	if (tap_get_state() != TAP_IDLE) {
@@ -209,7 +209,7 @@ static void gw16012_scan(bool ir_scan, enum scan_type type, uint8_t *buffer, int
 {
 	int bits_left = scan_size;
 	int bit_count = 0;
-	tap_state_t saved_end_state = tap_get_end_state();
+	enum tap_state saved_end_state = tap_get_end_state();
 	uint8_t scan_out, scan_in;
 
 	/* only if we're not already in the correct Shift state */
@@ -461,6 +461,8 @@ static int gw16012_init(void)
 {
 	uint8_t status_port;
 
+	LOG_WARNING("This adapter is deprecated and support will be removed in the next release!");
+
 	if (gw16012_init_device() != ERROR_OK)
 		return ERROR_JTAG_INIT_FAILED;
 
@@ -514,7 +516,8 @@ static struct jtag_interface gw16012_interface = {
 
 struct adapter_driver gw16012_adapter_driver = {
 	.name = "gw16012",
-	.transports = jtag_only,
+	.transport_ids = TRANSPORT_JTAG,
+	.transport_preferred_id = TRANSPORT_JTAG,
 	.commands = gw16012_command_handlers,
 
 	.init = gw16012_init,

@@ -77,7 +77,7 @@ struct command_invocation {
 	struct command_context *ctx;
 	struct command *current;
 	const char *name;
-	unsigned argc;
+	unsigned int argc;
 	const char **argv;
 	Jim_Obj * const *jimtcl_argv;
 	Jim_Obj *output;
@@ -197,7 +197,6 @@ typedef __COMMAND_HANDLER((*command_handler_t));
 struct command {
 	char *name;
 	command_handler_t handler;
-	Jim_CmdProc *jim_handler;
 	void *jim_handler_data;
 		/* Command handlers can use it for any handler specific data */
 	struct target *jim_override_target;
@@ -234,7 +233,6 @@ static inline struct command *jim_to_command(Jim_Interp *interp)
 struct command_registration {
 	const char *name;
 	command_handler_t handler;
-	Jim_CmdProc *jim_handler;
 	enum command_mode mode;
 	const char *help;
 	/** a string listing the options and arguments, required or optional */
@@ -414,7 +412,7 @@ int parse_llong(const char *str, long long *ul);
 #define DECLARE_PARSE_WRAPPER(name, type) \
 		int parse ## name(const char *str, type * ul)
 
-DECLARE_PARSE_WRAPPER(_uint, unsigned);
+DECLARE_PARSE_WRAPPER(_uint, unsigned int);
 DECLARE_PARSE_WRAPPER(_u64, uint64_t);
 DECLARE_PARSE_WRAPPER(_u32, uint32_t);
 DECLARE_PARSE_WRAPPER(_u16, uint16_t);

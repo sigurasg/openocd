@@ -2754,7 +2754,7 @@ static int stlink_usb_read_mem32_noaddrinc(void *handle, uint8_t ap_num, uint32_
 {
 	struct stlink_usb_handle *h = handle;
 
-	assert(handle != NULL);
+	assert(handle);
 
 	if (!(h->version.flags & STLINK_F_HAS_MEM_RD_NO_INC))
 		return ERROR_COMMAND_NOTFOUND;
@@ -2796,7 +2796,7 @@ static int stlink_usb_write_mem32_noaddrinc(void *handle, uint8_t ap_num, uint32
 {
 	struct stlink_usb_handle *h = handle;
 
-	assert(handle != NULL);
+	assert(handle);
 
 	if (!(h->version.flags & STLINK_F_HAS_MEM_WR_NO_INC))
 		return ERROR_COMMAND_NOTFOUND;
@@ -3740,7 +3740,7 @@ static int stlink_open(struct hl_interface_param *param, enum stlink_mode mode, 
 
 	h->st_mode = mode;
 
-	for (unsigned i = 0; param->vid[i]; i++) {
+	for (unsigned int i = 0; param->vid[i]; i++) {
 		LOG_DEBUG("transport: %d vid: 0x%04x pid: 0x%04x serial: %s",
 			  h->st_mode, param->vid[i], param->pid[i],
 			  adapter_get_required_serial() ? adapter_get_required_serial() : "");
@@ -3781,7 +3781,7 @@ static int stlink_open(struct hl_interface_param *param, enum stlink_mode mode, 
 	}
 
 	/* initialize the debug hardware */
-	err = stlink_usb_init_mode(h, param->connect_under_reset, param->initial_interface_speed);
+	err = stlink_usb_init_mode(h, param->connect_under_reset, adapter_get_speed_khz());
 
 	if (err != ERROR_OK) {
 		LOG_ERROR("init mode failed (unable to connect to the target)");
@@ -3947,7 +3947,7 @@ static int stlink_usb_rw_misc_out(void *handle, uint32_t items, const uint8_t *b
 
 	LOG_DEBUG_IO("%s(%" PRIu32 ")", __func__, items);
 
-	assert(handle != NULL);
+	assert(handle);
 
 	if (!(h->version.flags & STLINK_F_HAS_RW_MISC))
 		return ERROR_COMMAND_NOTFOUND;
@@ -3968,7 +3968,7 @@ static int stlink_usb_rw_misc_in(void *handle, uint32_t items, uint8_t *buffer)
 
 	LOG_DEBUG_IO("%s(%" PRIu32 ")", __func__, items);
 
-	assert(handle != NULL);
+	assert(handle);
 
 	if (!(h->version.flags & STLINK_F_HAS_RW_MISC))
 		return ERROR_COMMAND_NOTFOUND;
@@ -5143,7 +5143,12 @@ static int stlink_dap_init(void)
 
 	if ((mode != STLINK_MODE_DEBUG_SWIM) &&
 		!(stlink_dap_handle->version.flags & STLINK_F_HAS_DAP_REG)) {
-		LOG_ERROR("ST-Link version does not support DAP direct transport");
+		LOG_ERROR("The firmware in the ST-Link adapter only supports deprecated HLA.");
+		LOG_ERROR("Please consider updating the ST-Link firmware with a version");
+		LOG_ERROR("newer that V2J24 (2015), available for downloading on ST website:");
+		LOG_ERROR("  https://www.st.com/en/development-tools/stsw-link007.html");
+		LOG_ERROR("In mean time, you can re-run OpenOCD for ST-Link HLA as:");
+		LOG_ERROR("  openocd -f interface/stlink-hla.cfg ...");
 		return ERROR_FAIL;
 	}
 	return ERROR_OK;
@@ -5174,7 +5179,6 @@ static int stlink_dap_speed(int speed)
 		return ERROR_JTAG_NOT_IMPLEMENTED;
 	}
 
-	stlink_dap_param.initial_interface_speed = speed;
 	stlink_speed(stlink_dap_handle, speed, false);
 	return ERROR_OK;
 }
@@ -5218,11 +5222,10 @@ static const struct swim_driver stlink_swim_ops = {
 	.reconnect = stlink_swim_op_reconnect,
 };
 
-static const char *const stlink_dap_transport[] = { "dapdirect_swd", "dapdirect_jtag", "swim", NULL };
-
 struct adapter_driver stlink_dap_adapter_driver = {
 	.name = "st-link",
-	.transports = stlink_dap_transport,
+	.transport_ids = TRANSPORT_DAPDIRECT_SWD | TRANSPORT_DAPDIRECT_JTAG | TRANSPORT_SWIM,
+	.transport_preferred_id = TRANSPORT_DAPDIRECT_SWD,
 	.commands = stlink_dap_command_handlers,
 
 	.init = stlink_dap_init,

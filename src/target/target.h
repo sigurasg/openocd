@@ -46,6 +46,8 @@ struct gdb_fileio_info;
  * not sure how this is used with all the recent changes)
  * TARGET_DEBUG_RUNNING = 4: the target is running, but it is executing code on
  * behalf of the debugger (e.g. algorithm for flashing)
+ * TARGET_UNAVAILABLE = 5: The target is unavailable for some reason. It might
+ * be powered down, for instance.
  *
  * also see: target_state_name();
  */
@@ -56,6 +58,7 @@ enum target_state {
 	TARGET_HALTED = 2,
 	TARGET_RESET = 3,
 	TARGET_DEBUG_RUNNING = 4,
+	TARGET_UNAVAILABLE = 5
 };
 
 enum target_reset_mode {
@@ -139,7 +142,7 @@ struct target {
 	 */
 	bool running_alg;
 
-	struct target_event_action *event_action;
+	struct list_head events_action;
 
 	bool reset_halt;						/* attempt resetting the CPU into the halted mode? */
 	target_addr_t working_area;				/* working area (initialised RAM). Evaluated
@@ -184,7 +187,7 @@ struct target {
 	bool rtos_auto_detect;				/* A flag that indicates that the RTOS has been specified as "auto"
 										 * and must be detected when symbols are offered */
 	struct backoff_timer backoff;
-	int smp;							/* Unique non-zero number for each SMP group */
+	unsigned int smp;					/* Unique non-zero number for each SMP group */
 	struct list_head *smp_targets;		/* list all targets in this smp group/cluster
 										 * The head of the list is shared between the
 										 * cluster, thus here there is a pointer */
@@ -295,13 +298,6 @@ enum target_event {
 	TARGET_EVENT_SEMIHOSTING_USER_CMD_0X107 = 0x107,
 };
 
-struct target_event_action {
-	enum target_event event;
-	Jim_Interp *interp;
-	Jim_Obj *body;
-	struct target_event_action *next;
-};
-
 bool target_has_event_action(const struct target *target, enum target_event event);
 
 struct target_event_callback {
@@ -386,8 +382,8 @@ int target_unregister_trace_callback(
  * yet it is possible to detect error conditions.
  */
 int target_poll(struct target *target);
-int target_resume(struct target *target, int current, target_addr_t address,
-		int handle_breakpoints, int debug_execution);
+int target_resume(struct target *target, bool current, target_addr_t address,
+		bool handle_breakpoints, bool debug_execution);
 int target_halt(struct target *target);
 int target_call_event_callbacks(struct target *target, enum target_event event);
 int target_call_reset_callbacks(struct target *target, enum target_reset_mode reset_mode);
@@ -536,7 +532,7 @@ bool target_supports_gdb_connection(const struct target *target);
  * This routine is a wrapper for target->type->step.
  */
 int target_step(struct target *target,
-		int current, target_addr_t address, int handle_breakpoints);
+		bool current, target_addr_t address, bool handle_breakpoints);
 /**
  * Run an algorithm on the @a target given.
  *
@@ -685,7 +681,7 @@ target_addr_t target_address_max(struct target *target);
  *
  * This routine is a wrapper for target->type->address_bits.
  */
-unsigned target_address_bits(struct target *target);
+unsigned int target_address_bits(struct target *target);
 
 /**
  * Return the number of data bits this target supports.
@@ -778,8 +774,8 @@ int target_arch_state(struct target *target);
 void target_handle_event(struct target *t, enum target_event e);
 
 void target_handle_md_output(struct command_invocation *cmd,
-	struct target *target, target_addr_t address, unsigned size,
-	unsigned count, const uint8_t *buffer);
+	struct target *target, target_addr_t address, unsigned int size,
+	unsigned int count, const uint8_t *buffer);
 
 int target_profiling_default(struct target *target, uint32_t *samples, uint32_t
 		max_num_samples, uint32_t *num_samples, uint32_t seconds);

@@ -414,7 +414,19 @@ static int cmsis_dap_usb_open(struct cmsis_dap *dap, uint16_t vids[], uint16_t p
 static void cmsis_dap_usb_close(struct cmsis_dap *dap)
 {
 	for (unsigned int i = 0; i < MAX_PENDING_REQUESTS; i++) {
-		libusb_free_transfer(dap->bdata->command_transfers[i].transfer);
+		if (dap->bdata->command_transfers[i].status == CMSIS_DAP_TRANSFER_PENDING) {
+			LOG_DEBUG("busy command USB transfer at %u", dap->pending_fifo_put_idx);
+			struct timeval tv = {
+				.tv_sec = 1,
+				.tv_usec = 1000
+			};
+			/* Complete pending commands */
+			int res = libusb_handle_events_timeout_completed(dap->bdata->usb_ctx, &tv, NULL);
+			if (res == 0)
+				libusb_free_transfer(dap->bdata->command_transfers[i].transfer);
+		} else {
+			libusb_free_transfer(dap->bdata->command_transfers[i].transfer);
+		}
 		libusb_free_transfer(dap->bdata->response_transfers[i].transfer);
 	}
 	cmsis_dap_usb_free(dap);
@@ -441,7 +453,7 @@ static void LIBUSB_CALL cmsis_dap_usb_callback(struct libusb_transfer *transfer)
 }
 
 static int cmsis_dap_usb_read(struct cmsis_dap *dap, int transfer_timeout_ms,
-							  struct timeval *wait_timeout)
+							  enum cmsis_dap_blocking blocking)
 {
 	int transferred = 0;
 	int err;
@@ -464,20 +476,23 @@ static int cmsis_dap_usb_read(struct cmsis_dap *dap, int transfer_timeout_ms,
 		}
 	}
 
-	struct timeval tv = {
-		.tv_sec = transfer_timeout_ms / 1000,
-		.tv_usec = transfer_timeout_ms % 1000 * 1000
-	};
+	struct timeval tv;
+	if (blocking == CMSIS_DAP_NON_BLOCKING) {
+		tv.tv_sec = 0;
+		tv.tv_usec = 0;
+	} else {
+		tv.tv_sec = transfer_timeout_ms / 1000;
+		tv.tv_usec = transfer_timeout_ms % 1000 * 1000;
+	}
 
 	while (tr->status == CMSIS_DAP_TRANSFER_PENDING) {
-		err = libusb_handle_events_timeout_completed(dap->bdata->usb_ctx,
-												 wait_timeout ? wait_timeout : &tv,
+		err = libusb_handle_events_timeout_completed(dap->bdata->usb_ctx, &tv,
 												 &tr->status);
 		if (err) {
 			LOG_ERROR("error handling USB events: %s", libusb_strerror(err));
 			return ERROR_FAIL;
 		}
-		if (wait_timeout)
+		if (tv.tv_sec == 0 && tv.tv_usec == 0)
 			break;
 	}
 
@@ -529,7 +544,7 @@ static int cmsis_dap_usb_write(struct cmsis_dap *dap, int txlen, int timeout_ms)
 	tr = &dap->bdata->command_transfers[dap->pending_fifo_put_idx];
 
 	if (tr->status == CMSIS_DAP_TRANSFER_PENDING) {
-		LOG_ERROR("busy command USB transfer at %u", dap->pending_fifo_put_idx);
+		LOG_DEBUG_IO("busy command USB transfer at %u", dap->pending_fifo_put_idx);
 		struct timeval tv = {
 			.tv_sec = timeout_ms / 1000,
 			.tv_usec = timeout_ms % 1000 * 1000
@@ -544,7 +559,7 @@ static int cmsis_dap_usb_write(struct cmsis_dap *dap, int txlen, int timeout_ms)
 		tr->status = CMSIS_DAP_TRANSFER_IDLE;
 	}
 	if (tr->status == CMSIS_DAP_TRANSFER_COMPLETED) {
-		LOG_ERROR("USB write: late transfer competed");
+		LOG_DEBUG_IO("USB write: late transfer competed");
 		tr->status = CMSIS_DAP_TRANSFER_IDLE;
 	}
 	if (tr->status != CMSIS_DAP_TRANSFER_IDLE) {

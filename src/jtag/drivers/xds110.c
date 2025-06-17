@@ -172,7 +172,7 @@
 #define CMD_RUNTEST      3
 #define CMD_STABLECLOCKS 4
 
-/* Array to convert from OpenOCD tap_state_t to XDS JTAG state */
+/* Array to convert from OpenOCD enum tap_state to XDS JTAG state */
 static const uint32_t xds_jtag_state[] = {
 	XDS_JTAG_STATE_EXIT2_DR,   /* TAP_DREXIT2   = 0x0 */
 	XDS_JTAG_STATE_EXIT1_DR,   /* TAP_DREXIT1   = 0x1 */
@@ -1887,7 +1887,7 @@ static int xds110_speed(int speed)
 
 		} else {
 
-			const double XDS110_TCK_PULSE_INCREMENT = 66.0;
+			const double xds110_tck_pulse_increment = 66.0;
 			freq_to_use = speed * 1000; /* Hz */
 			delay_count = 0;
 
@@ -1908,7 +1908,7 @@ static int xds110_speed(int speed)
 			double current_value = max_freq_pulse_duration;
 
 			while (current_value < freq_to_pulse_width_in_ns) {
-				current_value += XDS110_TCK_PULSE_INCREMENT;
+				current_value += xds110_tck_pulse_increment;
 				++delay_count;
 			}
 
@@ -1919,9 +1919,9 @@ static int xds110_speed(int speed)
 			if (delay_count) {
 				double diff_freq_1 = freq_to_use -
 					(one_giga / (max_freq_pulse_duration +
-					(XDS110_TCK_PULSE_INCREMENT * delay_count)));
+					(xds110_tck_pulse_increment * delay_count)));
 				double diff_freq_2 = (one_giga / (max_freq_pulse_duration +
-					(XDS110_TCK_PULSE_INCREMENT * (delay_count - 1)))) -
+					(xds110_tck_pulse_increment * (delay_count - 1)))) -
 					freq_to_use;
 
 				/* One less count value yields a better match */
@@ -2058,15 +2058,14 @@ static const struct swd_driver xds110_swd_driver = {
 	.run = xds110_swd_run_queue,
 };
 
-static const char * const xds110_transport[] = { "swd", "jtag", NULL };
-
 static struct jtag_interface xds110_interface = {
 	.execute_queue = xds110_execute_queue,
 };
 
 struct adapter_driver xds110_adapter_driver = {
 	.name = "xds110",
-	.transports = xds110_transport,
+	.transport_ids = TRANSPORT_SWD | TRANSPORT_JTAG,
+	.transport_preferred_id = TRANSPORT_SWD,
 	.commands = xds110_command_handlers,
 
 	.init = xds110_init,

@@ -35,6 +35,7 @@
 
 /* begin OpenOCD changes */
 
+#include <assert.h>
 #include <stddef.h>
 
 struct list_head {
@@ -46,7 +47,7 @@ struct list_head {
 
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 
-#define LIST_HEAD(name) \
+#define OOCD_LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
 
 static inline void
@@ -109,6 +110,9 @@ static inline void
 linux_list_add(struct list_head *new, struct list_head *prev,
 	struct list_head *next)
 {
+	assert(next);
+	assert(prev);
+
 	next->prev = new;
 	new->next = next;
 	new->prev = prev;
